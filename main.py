@@ -7,13 +7,13 @@ from torch import optim
 from vocab import Vocab
 from CBOW import CBOW
 
-BATCH_SIZE = 32
-EMBED_DIM = 100
-EPOCHS = 100
-MAX_CONSEC_WORSE_EPOCHS = 1
-TEST_FREQ = 5
+def get_model(args, vocab):
+    if args.model_name == 'CBOW':
+        return CBOW(vocab, args.embed_dim)
+    else:
+        raise Exception("Unsupported Model name --> %s" % (args.model_name))
 
-def train(model, loss, optimizer, sentences1, sentences2, labels, vocab):
+def train_batch(model, loss, optimizer, sentences1, sentences2, labels, vocab):
     bow1, offsets1, bow2, offsets2, labels = model.prepare_batch(sentences1, sentences2, labels)
 
     # Reset gradient
@@ -32,21 +32,22 @@ def train(model, loss, optimizer, sentences1, sentences2, labels, vocab):
     return output.data[0]
 
 def test(model, vocab):
+    TEST_BATCH_SIZE = 128
     test_reader = open('./data/msr_paraphrase_test.txt', 'rb')
     test_data = np.array([example.split("\t") for example in test_reader.readlines()][1:])
 
-    num_batches = len(test_data) // BATCH_SIZE
+    num_batches = len(test_data) // TEST_BATCH_SIZE
     num_tested = 0
     num_wrong = 0
     for k in range(num_batches):
-        start, end = k * BATCH_SIZE, (k + 1) * BATCH_SIZE
+        start, end = k * TEST_BATCH_SIZE, (k + 1) * TEST_BATCH_SIZE
         sentences1 = test_data[start:end, 3]
         sentences2 = test_data[start:end, 4]
         labels = np.array(test_data[start:end, 0], dtype='float')
         bow1, offsets1, bow2, offsets2, _ = model.prepare_batch(sentences1, sentences2, labels)
         predictions = model(bow1, offsets1, bow2, offsets2).data.numpy()
 
-        predictions = np.reshape(predictions, (BATCH_SIZE,))
+        predictions = np.reshape(predictions, (TEST_BATCH_SIZE,))
         # simulate sigmoid + prediction
         predictions[predictions >= 0] = 1
         predictions[predictions < 0] = 0
@@ -58,21 +59,15 @@ def test(model, vocab):
 
     return float(num_tested - num_wrong) / num_tested
 
-
-def main():
+def train(args):
     train_reader = open('./data/msr_paraphrase_train.txt', 'rb')
     train_data = np.array([example.split("\t") for example in train_reader.readlines()][1:])
 
     vocab = Vocab()
-    embed_path = './embeddings/glove.6B/glove.6B.%dd.txt' % (EMBED_DIM)
-    vocab.build(train_data[:, 3:5], embed_path, EMBED_DIM)
+    embed_path = './embeddings/glove.6B/glove.6B.%dd.txt' % (args.embed_dim)
+    vocab.build(train_data[:, 3:5], embed_path, args.embed_dim)
 
-    model = CBOW(vocab, EMBED_DIM)
-
-    for param in model.parameters():
-        if param.size()[0] == vocab.size() + 1:
-            param.data = torch.FloatTensor(vocab.idx2Emb)
-            param.requires_grad = False
+    model = get_model(args, vocab)
 
     loss = torch.nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001)
@@ -82,27 +77,27 @@ def main():
     best_epoch = 0
     prev_accuracy = 0
     consec_worse_epochs = 0
-    for i in range(EPOCHS):
+    for i in range(args.epochs):
         cost = 0.
-        num_batches = len(train_data) // BATCH_SIZE
+        num_batches = len(train_data) // args.batch_size
         for k in range(num_batches):
-            start, end = k * BATCH_SIZE, (k + 1) * BATCH_SIZE
+            start, end = k * args.batch_size, (k + 1) * args.batch_size
             sentences1 = train_data[start:end, 3]
             sentences2 = train_data[start:end, 4]
             labels = train_data[start:end, 0]
-            cost += train(model, loss, optimizer, sentences1, sentences2, labels, vocab)
+            cost += train_batch(model, loss, optimizer, sentences1, sentences2, labels, vocab)
 
         print("Epoch = %d, average loss = %s" % (i + 1, cost / num_batches))
         np.random.shuffle(train_data)
 
-        if (i + 1) % TEST_FREQ == 0:
+        if (i + 1) % args.test_freq == 0:
             test_acc = test(model, vocab)
 
             if test_acc < prev_accuracy:
                 consec_worse_epochs += 1
-                if consec_worse_epochs >= MAX_CONSEC_WORSE_EPOCHS:
+                if consec_worse_epochs >= args.max_consec_worse_epochs:
                     print("Training incurred %s consecutive worsening epoch(s): from %s to %s" \
-                    % (MAX_CONSEC_WORSE_EPOCHS, i + 1 - (MAX_CONSEC_WORSE_EPOCHS * TEST_FREQ), i + 1))
+                    % (args.max_consec_worse_epochs, i + 1 - (args.max_consec_worse_epochs * args.test_freq), i + 1))
                     break
             else:
                 consec_worse_epochs = 0
@@ -117,6 +112,18 @@ def main():
     model.load_state_dict(best_params)
     acc = test(model, vocab)
     print("Best Accuracy achieved after epoch #%s --> %s%%" % (best_epoch, int(acc * 100.0)))
+
+def main():
+    parser = argparse.ArgumentParser(description='Paraphrase Detection Training Parameters.')
+    parser.add_argument('--model_name', default='CBOW')
+    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--embed_dim', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=25)
+    parser.add_argument('--max_consec_worse_epochs', type=int, default=3)
+    parser.add_argument('--test_freq', type=int, default=5)
+
+    args = parser.parse_args()
+    train(args)
 
 if __name__ == "__main__":
     main()

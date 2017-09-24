@@ -12,6 +12,13 @@ class CBOW(nn.Module):
         self.linear1 = nn.Linear(embedding_dim * 2, hidden_dims)
         self.output = nn.Linear(hidden_dims, 1)
 
+        # don't train the word embeddings
+        for param in self.parameters():
+            if param.size()[0] == self.vocab.size() + 1:
+                # keep default randomly initialized value for the UNK token
+                param.data[:-1] = torch.FloatTensor(vocab.idx2Emb[:-1])
+                param.requires_grad = False
+
 
     def prepare_batch(self, batch_sentences1, batch_sentences2, labels):
         batch_size = len(batch_sentences1)
