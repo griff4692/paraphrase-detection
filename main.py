@@ -4,24 +4,27 @@ import numpy as np
 import torch
 from torch.autograd import Variable
 from torch import optim
-from vocab import Vocab
-from CBOW import CBOW
+import vocab
+from models.CBOW import CBOW
+from models.Tree import Tree
 
 def get_model(args, vocab):
     if args.model_name == 'CBOW':
         return CBOW(vocab, args.embed_dim)
+    elif args.model_name == 'TREE':
+        return Tree(vocab, args.embed_dim)
     else:
         raise Exception("Unsupported Model name --> %s" % (args.model_name))
 
 def train_batch(model, loss, optimizer, sentences1, sentences2, labels, vocab):
-    bow1, offsets1, bow2, offsets2, labels = model.prepare_batch(sentences1, sentences2, labels)
+    x, y = model.prepare_batch(sentences1, sentences2, labels)
 
     # Reset gradient
     optimizer.zero_grad()
 
     # Forward
-    fx = model(bow1, offsets1, bow2, offsets2)
-    output = loss.forward(fx, labels)
+    fx = model(x)
+    output = loss.forward(fx, y)
 
     # Backward
     output.backward()
@@ -61,16 +64,22 @@ def test(model, vocab):
 
 def train(args):
     train_reader = open('./data/msr_paraphrase_train.txt', 'rb')
-    train_data = np.array([example.split("\t") for example in train_reader.readlines()][1:])
+    train_data = np.array([example.split("\t") for example in train_reader.readlines()])[1:]
 
-    vocab = Vocab()
+    # build up vocabulary
     embed_path = './embeddings/glove.6B/glove.6B.%dd.txt' % (args.embed_dim)
-    vocab.build(train_data[:, 3:5], embed_path, args.embed_dim)
+    vocab = Vocab()
+    if args.build_vocab_from_sources:
+        print "Loading stored vocab..."
+        vocab.load(args.embed_dim)
+        print "Done loading stored vocab..."
+    else:
+        vocab.build(train_data[:,3:5], embed_path, args.embed_dim)
 
     model = get_model(args, vocab)
 
     loss = torch.nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=0.001)
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=0.0001)
 
     best_accuracy = 0.0
     best_params = None
@@ -115,14 +124,21 @@ def train(args):
 
 def main():
     parser = argparse.ArgumentParser(description='Paraphrase Detection Training Parameters.')
-    parser.add_argument('--model_name', default='CBOW')
-    parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--model_name', default='TREE')
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--embed_dim', type=int, default=100)
     parser.add_argument('--epochs', type=int, default=25)
     parser.add_argument('--max_consec_worse_epochs', type=int, default=3)
+    parser.add_argument('--build_vocab_from_sources', type=int, default=1) # 0 False, True is 1
     parser.add_argument('--test_freq', type=int, default=5)
 
     args = parser.parse_args()
+
+    if(args.model_name == 'TREE' and not args.batch_size == 1):
+        print "\nWARNING -->TREE Models can only be trained with batch size 1\n"
+        print "...switching to batch size 1"
+        args.batch_size = 1
+
     train(args)
 
 if __name__ == "__main__":
