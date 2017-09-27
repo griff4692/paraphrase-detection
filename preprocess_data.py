@@ -6,7 +6,7 @@ from sentence_to_tree import build_tree
 
 os.environ['STANFORD_MODELS'] = '/Users/griffinadams/Desktop/stanford-parser-full-2017-06-09/stanford-parser-3.8.0-models.jar'
 
-BUILD_VOCAB_FROM_SOURCES = True # switch to False if you want to redo vocab ugh
+BUILD_VOCAB_FROM_SOURCES = False # switch to False if you want to redo vocab ugh
 EMBED_DIM = 100
 EMBED_PATH = './embeddings/glove.6B/glove.6B.%dd.txt' % (EMBED_DIM)
 

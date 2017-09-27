@@ -13,10 +13,8 @@ from models.Tree import Tree
 
 def get_model(args, vocab):
     if args.model_name == 'CBOW':
-        args.test_batch_size = 128
         return CBOW(vocab, args.embed_dim)
     elif args.model_name == 'TREE':
-        args.test_batch_size = 1
         return Tree(vocab, args.embed_dim)
     else:
         raise Exception("Unsupported Model name --> %s" % (args.model_name))
@@ -51,7 +49,7 @@ def test(model, test_batcher, vocab, args):
         sentences1, sentences2, labels = test_batcher.get_batch()
         x, y = model.prepare_batch(sentences1, sentences2, labels)
 
-        num_positive_labels += sum(labels)
+        num_positive_labels += sum([labels])
 
         predictions = model(x).data.numpy()
 
@@ -90,10 +88,10 @@ def resolve_vocab(args):
 
     return vocab
 
-def resolve_data(args, flavor = 'train'):
+def resolve_data(args, flavor):
     if args.use_preprocessed:
         with open('./data/msr_paraphrase_' + flavor + '.json', 'rb') as data_reader:
-            data = json.load(data_reader)
+            data = np.array(json.load(data_reader))
     else:
         data_reader = open('./data/msr_paraphrase_' + flavor + '.txt', 'rb')
         data = np.array([example.split("\t") for example in data_reader.readlines()])[1:]
@@ -108,8 +106,8 @@ def train(args):
     model = get_model(args, vocab)
 
     # intialize batchers
-    train_batcher = Batcher(train_data, args.batch_size, args.use_preprocessed)
-    test_batcher = Batcher(test_data, args.test_batch_size, args.use_preprocessed)
+    train_batcher = Batcher(train_data, args.batch_size, args.model_name)
+    test_batcher = Batcher(test_data, args.test_batch_size, args.model_name)
 
     # initialize training parameters
     loss = torch.nn.BCEWithLogitsLoss()
@@ -158,20 +156,16 @@ def train(args):
 def main():
     parser = argparse.ArgumentParser(description='Paraphrase Detection Training Parameters.')
     parser.add_argument('--model_name', default='TREE')
-    parser.add_argument('--batch_size', type=int, default=1)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--embed_dim', type=int, default=100)
     parser.add_argument('--epochs', type=int, default=25)
     parser.add_argument('--max_consec_worse_epochs', type=int, default=3)
     parser.add_argument('--build_vocab_from_sources', type=int, default=1) # 0 False, True is 1
     parser.add_argument('--use_preprocessed', type=int, default=1) # 0 False, 1 True
     parser.add_argument('--test_freq', type=int, default=5)
+    parser.add_argument('--test_batch_size', type=int, default=128)
 
     args = parser.parse_args()
-
-    if(args.model_name == 'TREE' and not args.batch_size == 1):
-        print "\nWARNING -->TREE Models can only be trained with batch size 1\n"
-        print "...switching to batch size 1"
-        args.batch_size = 1
 
     train(args)
 

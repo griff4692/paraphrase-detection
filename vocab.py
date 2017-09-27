@@ -25,10 +25,34 @@ class Vocab:
         pickle.dump(self.idx2Word, open('vocab/idx2Word.pk', 'wb'))
         pickle.dump(self.idx2Emb, open('vocab/idx2Emb_%d.pk' % (self.emb_dim), 'wb'))
 
+
+    def is_fraction(self, string):
+        split = string.split('/')
+
+        return len(split) == 2 and split[0].isdigit() and split[1].isdigit()
+
     def tokenizer(self, word_str):
         word_str = word_str.decode('utf-8')
         parsed_sentence = list(self.parser.raw_parse(word_str))[0].leaves()
-        return [word.lower() for word in parsed_sentence]
+
+        tokens = []
+        for (i, token) in enumerate(parsed_sentence):
+            token = token.lower()
+            if token.isdigit() and i < len(parsed_sentence) - 1:
+                if self.is_fraction(parsed_sentence[i + 1]):
+                    fraction = token + '-' + parsed_sentence[i + 1]
+                    tokens.append(token + '-' + parsed_sentence[i + 1])
+                    i += 1
+                else:
+                    tokens.append(token)
+            else:
+                tokens.append(token)
+
+        if(not len(parsed_sentence) == len(tokens)):
+            print parsed_sentence
+            print tokens
+
+        return tokens
 
     def get(self, token):
         return self.word2Idx[token] if token in self.word2Idx else self.unk_idx()
