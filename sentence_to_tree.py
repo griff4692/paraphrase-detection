@@ -25,19 +25,20 @@ def build_tree(raw_sent, vocab):
         for subtree in curr_subtree:
             id_counter += 1
 
-            if type(subtree) == unicode:
-                print subtree
-                print tree
-                for sub in tree.subtrees():
-                    print sub
-
-                tree.draw()
-
             subtree_node = TreeNode(subtree.label(), subtree.height() - 1, id_counter, curr_id)
             node_idx = sentence.add_to_level(curr_level + 1, subtree_node)
 
-            if(len(subtree) == 1 and type(subtree[0]) == unicode):
-                subtree_node.word = vocab.get(subtree[0].lower())
+            if type(subtree[0]) == unicode:
+                for subsubtree in subtree:
+                    if type(subsubtree) == unicode:
+                        subtree_node.words.append(subsubtree.lower())
+                        subtree_node.tokens.append(vocab.get(subsubtree.lower()))
+                    else:
+                        raise Exception("Mismatch of subtrees")
+
+                if len(subtree) > 1:
+                    print "\nDouble token leaf alert..."
+                    print subtree
             else:
                 q.put((subtree, curr_level + 1, id_counter))
 
@@ -48,6 +49,14 @@ class TreeSentence:
     def __init__(self, root):
         self.levels = [[] for i in range(root.get_height())]
         self.levels[0].append(root)
+
+    def __init__ (self, levels):
+        self.levels = levels
+
+        for (r, level) in enumerate(levels):
+            for(c, node_dict) in enumerate(level):
+                if(not isinstance(node_dict, TreeNode)):
+                    self.levels[r][c] = TreeNode(**node_dict)
 
     def add_to_level(self, idx, node):
         self.levels[idx].append(node)
@@ -78,7 +87,16 @@ class TreeSentence:
 class TreeNode:
     def __init__(self, label, height, my_id, parent_id):
         self.label = label
-        self.word = None
+        self.tokens = []
+        self.words = []
+        self.my_id = my_id
+        self.height = height
+        self.parent_id = parent_id
+
+    def __init__(self, label, height, my_id, parent_id, tokens, words):
+        self.label = label
+        self.tokens = tokens
+        self.words = words
         self.my_id = my_id
         self.height = height
         self.parent_id = parent_id
@@ -87,24 +105,26 @@ class TreeNode:
         return self.height
 
     def is_leaf(self):
-        return self.height() == 1
+        return self.get_height() == 1
 
     def pretty_print(self, child_ids, vocab=None):
         child_ids = [str(child_id[0]) for child_id in child_ids]
-        actual_word = '' if self.word is None or vocab is None else vocab.get_word(self.word)
-        word_str = '' if self.word is None else 'Word = ' + actual_word + ' (' + str(self.word) + ')'
         print 'ID = ( ' + str(self.my_id) + ' )'
         print '\t--> Label = ' + self.label
         print '\t--> Height = ' + str(self.height)
         print '\t--> Parent ID = ( ' + str(self.parent_id) + ' )'
         print '\t--> Child IDs = [ ' + ", ".join(child_ids) + ' ]'
-        if len(word_str) > 0:
-            print '\t--> ' + word_str
+        for (i, word) in enumerate(self.words):
+            print '\t--> Word = ' + self.words[i] + ' (' + str(self.tokens[i]) + ')'
 
 if __name__== '__main__':
-    sentence = "the quick brown fox jumps over the lazy dog"
+    sentence = "The 1 5/8 percent note maturing in April 2005 gained 1/16 to 100 13/32, lowering its yield 1 basis points to 1.41 percent.".decode('utf-8')
     vocab = Vocab()
     vocab.load(100)
 
-    tree_sentence = build_tree(sentence, vocab)
-    tree_sentence.render(vocab)
+    idx = vocab.get("5/8")
+    split_idx = vocab.get("1 5/8".decode('utf-8'))
+    # vocab.tokenizer(sentence)
+    #
+    # tree_sentence = build_tree(sentence, vocab)
+    # tree_sentence.render(vocab)

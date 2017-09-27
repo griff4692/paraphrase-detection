@@ -34,34 +34,32 @@ if __name__ == '__main__':
         data = []
 
         for (i, example) in enumerate(unprocessed_data):
+            new_example = []
+            new_example.append(float(example[0]))
 
-            if i > 239:
-                new_example = []
-                new_example.append(float(example[0]))
+            raw_sentence_1 = example[3]
+            raw_sentence_2 = example[4]
 
-                raw_sentence_1 = example[3]
-                raw_sentence_2 = example[4]
+            tokens_1 = vocab.tokenizer(raw_sentence_1)
+            tokens_2 = vocab.tokenizer(raw_sentence_2)
 
-                tokens_1 = vocab.tokenizer(raw_sentence_1)
-                tokens_2 = vocab.tokenizer(raw_sentence_2)
+            idxs_1 = vocab.tokens_to_idxs(tokens_1)
+            idxs_2 = vocab.tokens_to_idxs(tokens_2)
 
-                idxs_1 = vocab.tokens_to_idxs(tokens_1)
-                idxs_2 = vocab.tokens_to_idxs(tokens_2)
+            tree_1 = build_tree(raw_sentence_1.decode('utf-8'), vocab)
+            tree_2 = build_tree(raw_sentence_2.decode('utf-8'), vocab)
 
-                tree_1 = build_tree(raw_sentence_1.decode('utf-8'), vocab)
-                tree_2 = build_tree(raw_sentence_2.decode('utf-8'), vocab)
+            new_example.append(raw_sentence_1)
+            new_example.append(tokens_1)
+            new_example.append(idxs_1)
+            new_example.append(tree_1)
 
-                new_example.append(raw_sentence_1)
-                new_example.append(tokens_1)
-                new_example.append(idxs_1)
-                new_example.append(tree_1)
+            new_example.append(raw_sentence_2)
+            new_example.append(tokens_2)
+            new_example.append(idxs_2)
+            new_example.append(tree_2)
 
-                new_example.append(raw_sentence_2)
-                new_example.append(tokens_2)
-                new_example.append(idxs_2)
-                new_example.append(tree_2)
-
-                data.append(new_example)
+            data.append(new_example)
 
             if((i + 1) % 10 == 0):
                 print("Processing " + str(i + 1) + " / " + str(unprocessed_data.shape[0]) + " examples for " + flavor)
