@@ -25,9 +25,8 @@ def glob_compound_leaves(leaves, compound1, compound2 = None):
 
 def build_tree(raw_sent, vocab):
     tree = list(parser.raw_parse(raw_sent))[0]
-    leaves = [leaf.lower() for leaf in tree.leaves()]
 
-    tree.draw()
+    leaves = [leaf.lower() for leaf in tree.leaves()]
 
     id_counter = 0
 

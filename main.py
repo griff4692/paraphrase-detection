@@ -49,11 +49,12 @@ def test(model, test_batcher, vocab, args):
         sentences1, sentences2, labels = test_batcher.get_batch()
         x, y = model.prepare_batch(sentences1, sentences2, labels)
 
-        num_positive_labels += sum([labels])
+        num_positive_labels += np.sum(labels)
 
         predictions = model(x).data.numpy()
 
         predictions = np.reshape(predictions, (test_batcher.batch_size,))
+
         # simulate sigmoid + prediction
         predictions[predictions >= 0] = 1
         predictions[predictions < 0] = 0
@@ -112,7 +113,7 @@ def train(args):
     # initialize training parameters
     loss = torch.nn.BCEWithLogitsLoss()
     # don't optimizer fixed weights like GloVe embeddings
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=0.0001)
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr)
 
     # evaluation metrics
     best_accuracy = 0.0
@@ -157,6 +158,7 @@ def main():
     parser = argparse.ArgumentParser(description='Paraphrase Detection Training Parameters.')
     parser.add_argument('--model_name', default='TREE')
     parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--lr', type=float, default=0.001, description='Initial learning rate to pass to optimizer.')
     parser.add_argument('--embed_dim', type=int, default=100)
     parser.add_argument('--epochs', type=int, default=25)
     parser.add_argument('--max_consec_worse_epochs', type=int, default=3)
