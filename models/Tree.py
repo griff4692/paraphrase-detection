@@ -30,30 +30,21 @@ class Tree(nn.Module):
 
 
     # Flatten according to paper
-    # first by original word-level sentence order
-    # don't include terminal root node
-    def flatten(self, matrix, tree, full_count):
-        idx = len(tree.leaves)
+    # first by original word-level sentence order (tree.leaves)
+    def flatten(self, matrix, tree, non_terminal_ct):
+        leaf_embeds = self.embeddings(torch.LongTensor(tree.leaves))
+        leaf_len = len(tree.leaves)
+        idx = leaf_len
 
-        filled_leaves = []
-        for i in range(tree.leaves):
-            filled_leaves.append(0)
+        flattened = Variable(torch.zeros(leaf_len + non_terminal_ct, self.embed_dim))
 
-        flattened = Variable(torch.zeros(full_count, self.embed_dim))
+        flattened[:leaf_len] = leaf_embeds
+
         for r in range(len(matrix) - 1, -1, -1):
             row = matrix[r]
             for c in range(len(row) - 1, -1, -1):
-                col = row[c]
-                tree_node = tree.levels[r][c]
-                if tree_node.is_leaf():
-                    leaf_idxs = tree.leaf_idxs(tree_node.word)
-
-                    for(leaf_idx in leaf_idxs):
-                        if filled_leaves[leaf_idx] == 0: # fill it in
-                            filled_leaves[leaf_idx] = 1
-                            flattened[leaf_idx, :] = col
-                else:
-                    flattened[idx, :] = col
+                if not tree.levels[r + 1][c].is_leaf():
+                    flattened[idx, :] = row[c]
                     idx += 1
 
         return flattened
@@ -77,38 +68,37 @@ class Tree(nn.Module):
             for (no, tree) in enumerate(trees):
                 hidden_states.append([])
 
-                for i in range(len(tree.levels)):
+                for i in range(len(tree.levels) - 1): # no need to include root node
                     hidden_states[no].append([])
 
-                for r in range(len(tree.levels) - 1, -1, -1):
+                for r in range(len(tree.levels) - 1, 0, -1): # don't include root node
                     level = tree.levels[r]
-                    num_subtrees[no] += len(level)
-
                     for (c, node) in enumerate(level):
                         if node.is_leaf():
                             # if compound word like [1, 5/8] - take mean of each components embedding
-                            h = self.embeddings(torch.LongTensor(node.tokens)).mean(0)
-                            hidden_states[no][r].append(h)
+                            h = self.embeddings(torch.LongTensor([node.token]))
+                            hidden_states[no][r - 1].append(h)
                         else:
+                            num_subtrees[no] += 1
                             children = tree.get_children(r, c)
-                            new_h = None
                             for i in range(len(children)):
-                                curr_h = hidden_states[no][r + 1][children[i][0]]
+                                curr_h = hidden_states[no][r][children[i][0]]
                                 if i == 0:
                                     new_h = self.affine_transform(curr_h)
                                 else:
                                     new_h += self.affine_transform(curr_h)
 
                             output_h = F.tanh(new_h + self.affine_bias)
-                            hidden_states[no][r].append(output_h)
+                            hidden_states[no][r - 1].append(output_h)
 
             # Column-wise tensor of subtree hidden states
-            sent_1_mat =  self.flatten(hidden_states[0], num_subtrees[0]) # |subtrees1|, embed
-            sent_2_mat =  self.flatten(hidden_states[1], num_subtrees[1]) # |subtrees2|, embed
+            sent_1_mat =  self.flatten(hidden_states[0], trees[0], num_subtrees[0]) # |subtrees1|, embed
+            sent_2_mat =  self.flatten(hidden_states[1], trees[1], num_subtrees[1]) # |subtrees2|, embed
 
             # Compute similarity matrix
-            sent_1_mat_stacked = torch.stack([sent_1_mat] * num_subtrees[1]) # |s1|, |s2|, embed
-            sent_2_mat_stacked = torch.stack([sent_2_mat] * num_subtrees[0]).transpose(0, 1) # |s1|, |s2|, embed
+            sent_1_mat_stacked = torch.stack([sent_1_mat] * sent_2_mat.size()[0]) # |s1|, |s2|, embed
+            sent_2_mat_stacked = torch.stack([sent_2_mat] * sent_1_mat.size()[0]).transpose(0, 1) # |s1|, |s2|, embed
+
             sim_mat = torch.sum((sent_1_mat_stacked - sent_2_mat_stacked)**2, 2).unsqueeze(0)
 
             sim_mat_pool = self.dynamic_max_pool(sim_mat)

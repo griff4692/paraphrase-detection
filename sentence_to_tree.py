@@ -9,19 +9,14 @@ os.environ['STANFORD_MODELS'] = '/Users/griffinadams/Desktop/stanford-parser-ful
 parser = StanfordParser() # model_path?
 
 
-def glob_compound_leaves(leaves, word):
-    compounds = word.split('-')
-
-    if len(compounds) == 1:
+def glob_compound_leaves(leaves, compound1, compound2 = None):
+    if compound2 is None:
         return leaves
 
-    if len(compounds) == 3:
-        raise Exception("Triple Compound= " + word)
-
     for (i, leaf) in enumerate(leaves):
-        if compounds[0] == leaf and compounds[1] == leaves[i + 1]:
+        if compound1 == leaf and compound2 == leaves[i + 1]:
             # both are equal to compound
-            leaves[i] = word
+            leaves[i] = compound1 + "-" + compound2
             leaves = leaves[:i + 1] + leaves[i + 2:]
             return leaves
 
@@ -31,6 +26,8 @@ def glob_compound_leaves(leaves, word):
 def build_tree(raw_sent, vocab):
     tree = list(parser.raw_parse(raw_sent))[0]
     leaves = [leaf.lower() for leaf in tree.leaves()]
+
+    tree.draw()
 
     id_counter = 0
 
@@ -50,33 +47,29 @@ def build_tree(raw_sent, vocab):
             node_idx = sentence.add_to_level(curr_level + 1, subtree_node)
 
             if type(subtree[0]) == unicode:
-                word = subtree[0]
+                word = subtree[0].lower()
                 if len(subtree) > 1:
-                    word = ''
-                    for (i, subsubtree) in enumerate(subtree):
-                        if i > 0:
-                            word += '-'
-                        word += subsubtree.lower()
-                        leaves = glob_compound_leaves(leaves, word)
+                    word2 = subtree[1].lower()
+                    leaves = glob_compound_leaves(leaves, word, word2)
+                    word += "-" + word2
 
                 subtree_node.word = word
                 subtree_node.token = vocab.get(word)
             else:
                 q.put((subtree, curr_level + 1, id_counter))
 
-    sentence.add_leaves(leaves)
+    sentence.add_leaves(leaves, vocab)
     return sentence
 
 
 class TreeSentence:
-    def __init__ (self, root_or_levels, leaves = []):
+    def __init__ (self, levels, leaves = []):
         self.leaves = leaves
-        if isinstance(root_or_levels, TreeNode):
-            root = root_or_levels
+        if isinstance(levels, TreeNode):
+            root = levels
             self.levels = [[] for i in range(root.get_height())]
             self.levels[0].append(root)
         else:
-            levels = root_or_levels
             self.levels = levels
             for (r, level) in enumerate(levels):
                 for(c, node_dict) in enumerate(level):
@@ -87,11 +80,8 @@ class TreeSentence:
         self.levels[idx].append(node)
         return len(self.levels[idx]) - 1
 
-    def leaf_idxs(self, word):
-        return [idx for idx, leaf_word in enumerate(leaves) if word == leaf_word]
-
-    def add_leaves(self, leaves):
-        self.leaves = leaves
+    def add_leaves(self, leaves, vocab):
+        self.leaves = [vocab.get(leaf) for leaf in leaves]
 
     def get_height(self):
         return self.levels[0][0].get_height()
@@ -141,7 +131,7 @@ class TreeNode:
             print '\t--> Word = ' + self.word + ' (' + str(self.token) + ')'
 
 if __name__== '__main__':
-    sentence = "The 1 5/8 percent note maturing in April 2005 gained 1/16 to 100 13/32, lowering its yield 1 basis points to 1.41 percent.".decode('utf-8')
+    sentence = "the cats from new york catch mice".decode('utf-8')
     vocab = Vocab()
     vocab.load(100)
     tree_sentence = build_tree(sentence, vocab)

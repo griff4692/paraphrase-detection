@@ -42,15 +42,10 @@ class Vocab:
                 if self.is_fraction(parsed_sentence[i + 1]):
                     fraction = token + '-' + parsed_sentence[i + 1]
                     tokens.append(token + '-' + parsed_sentence[i + 1])
-                    i += 1
                 else:
                     tokens.append(token)
             else:
                 tokens.append(token)
-
-        if(not len(parsed_sentence) == len(tokens)):
-            print parsed_sentence
-            print tokens
 
         return tokens
 
@@ -70,8 +65,8 @@ class Vocab:
         tokens = self.tokenizer(sentence_str)
         return self.tokens_to_idxs(tokens)
 
-    def build(self, sentences, path_to_embed, emb_dims):
-        self.emb_dims = emb_dims
+    def build(self, sentences, path_to_embed, emb_dim):
+        self.emb_dim = emb_dim
         self.max_sent_length = 0
         for sentence in sentences:
             tokens_1 = self.tokenizer(sentence[0])
@@ -88,7 +83,7 @@ class Vocab:
                     self.idx2Word.append(token)
                     self.word2Idx[token] = idx
 
-        self.build_emb_matrix(path_to_embed, emb_dims)
+        self.build_emb_matrix(path_to_embed, emb_dim)
 
     def unk_idx(self):
         return self.size()
@@ -96,9 +91,9 @@ class Vocab:
     def size(self):
         return len(self.idx2Word)
 
-    def build_emb_matrix(self, path_to_embed, emb_dims):
-        self.emb_dims = emb_dims
-        self.idx2Emb = np.zeros((self.size() + 1, emb_dims), dtype='float')
+    def build_emb_matrix(self, path_to_embed, emb_dim):
+        self.emb_dim = emb_dim
+        self.idx2Emb = np.zeros((self.size() + 1, emb_dim), dtype='float')
 
         hits = 0
 

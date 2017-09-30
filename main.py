@@ -79,10 +79,10 @@ def resolve_vocab(args):
     # build up vocabulary
     embed_path = './embeddings/glove.6B/glove.6B.%dd.txt' % (args.embed_dim)
     vocab = Vocab()
-    if args.build_vocab_from_sources:
+    if args.build_vocab_from_sources == 1:
         print "Loading stored vocab..."
         vocab.load(args.embed_dim)
-        print "Done loading stored vocab..."
+        print "Done loading stored vocab..." + str(vocab.size()) + ' words'
     else:
         vocab.build(train_data[:, 3:5], embed_path, args.embed_dim)
 
