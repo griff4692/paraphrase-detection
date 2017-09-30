@@ -1,23 +1,9 @@
-import argparse
-import json
 import numpy as np
 import torch
 from torch.autograd import Variable
 from torch import optim
 
-from vocab import Vocab
 from batcher import Batcher
-
-from models.CBOW import CBOW
-from models.Tree import Tree
-
-def get_model(args, vocab):
-    if args.model_name == 'CBOW':
-        return CBOW(vocab, args.embed_dim)
-    elif args.model_name == 'TREE':
-        return Tree(vocab, args.embed_dim)
-    else:
-        raise Exception("Unsupported Model name --> %s" % (args.model_name))
 
 def train_batch(model, loss, optimizer, sentences1, sentences2, labels, vocab):
     x, y = model.prepare_batch(sentences1, sentences2, labels)
@@ -38,12 +24,10 @@ def train_batch(model, loss, optimizer, sentences1, sentences2, labels, vocab):
     return output.data[0]
 
 def test(model, test_batcher, vocab, args):
-    test_data = resolve_data(args, "test")
-
     num_tested = 0
     num_wrong = 0
     true_positives = 0
-    true_predicted_positives = 0
+    num_predicted_positives = 0
     num_positive_labels = 0
     while not test_batcher.is_finished():
         sentences1, sentences2, labels = test_batcher.get_batch()
@@ -69,42 +53,15 @@ def test(model, test_batcher, vocab, args):
         num_wrong += np.sum(abs_deltas)
         num_tested += predictions.shape[0]
 
-    precision = float(true_positives) / predicted_positives
+    precision = float(true_positives) / num_predicted_positives
     recall = float(true_positives) / num_positive_labels
 
     F_score = 2.0 / ((1.0 / recall) + (1.0 / precision))
 
     return float(num_tested - num_wrong) / num_tested, F_score
 
-def resolve_vocab(args):
-    # build up vocabulary
-    embed_path = './embeddings/glove.6B/glove.6B.%dd.txt' % (args.embed_dim)
-    vocab = Vocab()
-    if args.build_vocab_from_sources == 1:
-        print "Loading stored vocab..."
-        vocab.load(args.embed_dim)
-        print "Done loading stored vocab..." + str(vocab.size()) + ' words'
-    else:
-        vocab.build(train_data[:, 3:5], embed_path, args.embed_dim)
-
-    return vocab
-
-def resolve_data(args, flavor):
-    if args.use_preprocessed:
-        with open('./data/msr_paraphrase_' + flavor + '.json', 'rb') as data_reader:
-            data = np.array(json.load(data_reader))
-    else:
-        data_reader = open('./data/msr_paraphrase_' + flavor + '.txt', 'rb')
-        data = np.array([example.split("\t") for example in data_reader.readlines()])[1:]
-
-    return data
-
-def train(args):
+def train(args, model, train_data, test_data, vocab):
     # retrieve proper data, model, and vocabulary
-    train_data = resolve_data(args, "train")
-    test_data = resolve_data(args, "test")
-    vocab = resolve_vocab(args)
-    model = get_model(args, vocab)
 
     # intialize batchers
     train_batcher = Batcher(train_data, args.batch_size, args.model_name)
@@ -137,7 +94,7 @@ def train(args):
             if test_acc < prev_accuracy:
                 consec_worse_epochs += 1
                 if consec_worse_epochs >= args.max_consec_worse_epochs:
-                    print("Training incurred %s consecutive worsening epoch(s): from %s to %s" \
+                    print("Training incurred %s consecutive worsening epoch(s): from %s to %s"
                     % (args.max_consec_worse_epochs, i + 1 - (args.max_consec_worse_epochs * args.test_freq), i + 1))
                     break
             else:
@@ -154,22 +111,3 @@ def train(args):
     acc, F_score = test(model, test_batcher, vocab, args)
     print("Best Accuracy achieved after epoch #%s --> %s%% (%s" % (best_epoch, int(acc * 100.0), F_score))
 
-def main():
-    parser = argparse.ArgumentParser(description='Paraphrase Detection Training Parameters.')
-    parser.add_argument('--model_name', default='TREE')
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--lr', type=float, default=0.001, description='Initial learning rate to pass to optimizer.')
-    parser.add_argument('--embed_dim', type=int, default=100)
-    parser.add_argument('--epochs', type=int, default=25)
-    parser.add_argument('--max_consec_worse_epochs', type=int, default=3)
-    parser.add_argument('--build_vocab_from_sources', type=int, default=1) # 0 False, True is 1
-    parser.add_argument('--use_preprocessed', type=int, default=1) # 0 False, 1 True
-    parser.add_argument('--test_freq', type=int, default=5)
-    parser.add_argument('--test_batch_size', type=int, default=128)
-
-    args = parser.parse_args()
-
-    train(args)
-
-if __name__ == "__main__":
-    main()
